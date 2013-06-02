@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# A multilog-based logger script
+#
+
+## Project
+project_name="$1"
+if [ -z "$project_name" ] ; then
+  echo "FATAL: service-logger requires a 'project_name' parameter"
+  exit 1
+fi
+
+project_root="$HOME/$project_name"
+if [ ! -d "$project_root" ] ; then
+  echo "FATAL: project root '$project_root' not found"
+  exit 1
+fi
+shift
+
+## Make sure we have a valid environment
+env="$1"
+if [ -z "$env" ] ; then
+  echo "FATAL: service-logger requires a 'environ' parameter"
+  exit 1
+fi
+
+project_envdir="$project_root/$env"
+if [ ! -d "$project_envdir" ] ; then
+  echo "FATAL: service-logger requires a valid 'environ' parameter"
+  echo "       per env directory '$project_envdir' not found"
+  exit 1
+fi
+shift
+
+## Capture logger name
+logger="$1"
+if [ -z "$logger" ] ; then
+  echo "FATAL: service-logger requires a 'logger name' parameter"
+  exit 1
+fi
+shift
+
+
+## Final logger name
+logger="${project_name}-${logger}-${env}"
+
+export project_name project_root project_envdir logger env
+
+
+## Init our service logger environment
+if [ -e "$project_envdir/devops/environment.sh" ] ; then
+  source "$project_envdir/devops/environment.sh" $env
+fi
+
+## Make sure we have a logger directory
+LOG_DIR="$HOME/logs/services/$logger"
+if [ ! -d "$LOG_DIR" ] ; then
+  mkdir -p "$LOG_DIR"
+fi
+
+## Make sure the local "main-*" link is correct
+main="main-$logger"
+rm -f ./main-*
+ln -s "$LOG_DIR" $main
+
+## Start logger
+if [ "$EUID" == "0" ] ; then
+  chown -R $USER:$GROUP "$LOG_DIR"
+  exec setuidgid "$USER" multilog t "./$main"
+else
+  exec multilog t "./$main"
+fi
